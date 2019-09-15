@@ -1,0 +1,82 @@
+box: microsoft/dotnet:2.2-sdk
+no-response-timeout: 10
+services:
+    - name: rediscache
+      id: redis:3.2.6
+      cmd: redis-server    
+
+build:
+  steps: 
+    - script:
+        name: restore
+        cwd: StatlerWaldorfCorp.RealityService
+        code: |
+          dotnet restore
+    - script:
+        name: build
+        cwd: StatlerWaldorfCorp.RealityService
+        code: |
+          dotnet build  
+    - script:
+        name: test-restore
+        cwd: StatlerWaldorfCorp.RealityService.Tests
+        code: |
+           dotnet restore
+    - script:
+        name: test-build
+        cwd: StatlerWaldorfCorp.RealityService.Tests
+        code: |
+          dotnet build
+    - script:
+        name: test-run
+        cwd: StatlerWaldorfCorp.RealityService.Tests
+        code: |
+          dotnet test
+# Packaging...
+
+    - script:
+        name: publish
+        cwd: StatlerWaldorfCorp.RealityService
+        code: |
+          dotnet publish -o publish  
+    - script:
+        name: copy binary
+        cwd: StatlerWaldorfCorp.RealityService
+        code: |
+          cp -r . $WERCKER_OUTPUT_DIR/app 
+    - script:
+        name: copy entrypoint
+        code: |
+          cp docker_entrypoint.sh $WERCKER_OUTPUT_DIR/app          
+    - script:
+        name: copy config
+        cwd: StatlerWaldorfCorp.RealityService
+        code: |
+          cp appsettings*json $WERCKER_OUTPUT_DIR/app/publish
+          mkdir -p $WERCKER_OUTPUT_DIR/app/publish/app/tmp                    
+    - script:
+        name: integration-restore
+        cwd: StatlerWaldorfCorp.RealityService.Tests.Integration
+        code: |
+            dotnet restore
+    - script:
+        name: integration-build
+        cwd: StatlerWaldorfCorp.RealityService.Tests.Integration
+        code: |                        
+            dotnet build
+    - script:
+        name: integration-run
+        cwd: StatlerWaldorfCorp.RealityService.Tests.Integration
+        code: |            
+            cp appsettings.json bin/Debug/netcoreapp1.1
+            export REDIS__CONFIGSTRING=$REDISCACHE_PORT_6379_TCP_ADDR            
+            dotnet test    
+deploy:
+  steps:
+    - internal/docker-push:
+        cwd: $WERCKER_OUTPUT_DIR/app
+        username: $USERNAME
+        password: $PASSWORD
+        repository: yunusemregacti/es-reality-service
+        registry: https://registry.hub.docker.com
+        entrypoint: "/pipeline/source/app/docker_entrypoint.sh" 
